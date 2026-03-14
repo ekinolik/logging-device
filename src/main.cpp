@@ -98,4 +98,6 @@ void detectButtonPress() {
     } else {
         digitalWrite(LED_PIN, LOW);
     }
+
+    delay(20);
 }   
