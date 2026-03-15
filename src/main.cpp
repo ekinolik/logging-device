@@ -1,4 +1,9 @@
 #include "verifySD.h"
+#include  "app_config.h"
+#include "button_manager.h"
+#include "led_manager.h"
+#include "power_manager.h"
+#include "boot_state.h"
 
 #include <Arduino.h>
 #include <SPI.h>
@@ -14,20 +19,40 @@
 #define SD_SCK  18 // yellow
 #define SD_MISO 15 // green
 
-#define LED_PIN 16 // white
-#define BUTTON_PIN 6 // red
+#define LOCAL_LED_PIN 16 // white
+#define LOCAL_BUTTON_PIN 6 // red
+
+ButtonManager button(
+    static_cast<uint8_t>(AppConfig::BUTTON_PIN),
+    AppConfig::BUTTON_ACTIVE_LOW,
+    AppConfig::BUTTON_DEBOUNCE_MS
+);
+
+LedManager led(static_cast<uint8_t>(AppConfig::LED_PIN));
+
+PowerManager powerManager(
+    button,
+    led,
+    AppConfig::SHUTDOWN_HOLD_MS
+);
 
 SPIClass spi = SPIClass(FSPI);
 
-void detectButtonPress();
-
 void setup() {
     Serial.begin(115200);
+    delay(2000);
 
-    pinMode(LED_PIN, OUTPUT);
-    pinMode(BUTTON_PIN, INPUT_PULLUP);
+    BootState::begin();
+    BootState::printBootSummary(Serial);
 
-    delay(5000);
+    //gpio_dump_io_configuration(stdout, SOC_GPIO_VALID_GPIO_MASK);
+
+    button.begin();
+    led.begin();
+    led.setMode(LedMode::SOLID_ON);
+    powerManager.begin();
+
+    Serial.println("Boot Complete");
 
     Serial.println("Starting Setup...");
 
@@ -77,7 +102,11 @@ void setup() {
 }
 
 void loop() {
-    detectButtonPress();
+    button.update();
+    powerManager.update();
+    led.update();
+
+    /*
     static bool noError = true;
     static int32_t n = 0;
     if (!noError) return;
@@ -85,19 +114,10 @@ void loop() {
 
     noError = WriteAndVerify(n);
     n++;
+    */
 
 
-    delay(1000);
+    delay(1);
+    //delay(1000);
 
 }
-
-void detectButtonPress() {
-    if (digitalRead(BUTTON_PIN) == LOW) {
-        digitalWrite(LED_PIN, HIGH);
-        Serial.println("Button pressed!");
-    } else {
-        digitalWrite(LED_PIN, LOW);
-    }
-
-    delay(20);
-}   
