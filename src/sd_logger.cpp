@@ -28,6 +28,7 @@ bool SDLogger::initSDCard() {
     }
 
     Serial.println("[SD] SD init success!");
+
     return true;
 }
 
@@ -121,11 +122,32 @@ bool SDLogger::ensureDirectoryExists(const String& path) {
         return true;
     }
 
-    if (!SD.mkdir("test-logger")) {
-        Serial.println("[SD] Failed to create test directory");
+    // Create each directory level if needed.  Docs say this is not needed, but in practice it seems to fail if parent directories don't exist.
+    // https://docs.arduino.cc/libraries/sd/
+    String current = "";
+    int start = 1; // Skip leading slash
+    while (true) {
+        int slash = dir.indexOf('/', start);
+
+        if (slash == -1) {
+            current = dir;
+        } else {
+            current = dir.substring(0, slash);
+        }
+
+        if (!SD.exists(current)) {
+            Serial.println("[SD] mkdir " + current);
+            if (!SD.mkdir(current)) {
+                Serial.println("[SD] Failed to create directory " + current);
+                return false;
+            }
+        }
+
+        if (slash == -1) break;
+        start = slash + 1;
     }
 
-    return SD.mkdir(dir);
+    return true;
 }
 
 bool SDLogger::appendEntryToFile(const LogEntry& entry) {

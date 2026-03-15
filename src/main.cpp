@@ -59,7 +59,7 @@ void setup() {
     SDLogger::LogEntry entry;
     entry.deviceId = "logger";
     entry.timestampMs = millis();
-    entry.line = "{\"event\":\"boot\",\"boot_count\":" + BootState::getBootCount() + '}';
+    entry.line = "{\"event\":\"boot\",\"boot_count\":" + String(BootState::getBootCount()) + '}';
     logger.appendNow(entry);
 }
 
@@ -79,7 +79,7 @@ void loop() {
     // temporary for phase 2 test generator
     static uint32_t lastWriteMs = 0;
     static uint32_t counter = 0;
-    static uint32_t now = millis();
+    const uint32_t now = millis();
 
     if (!powerManager.isAcceptingRequests() || !logger.isAcceptingEntries() || now - lastWriteMs < 5000) {
         return;
