@@ -1,26 +1,12 @@
-#include "verifySD.h"
-#include  "app_config.h"
+#include "app_config.h"
 #include "button_manager.h"
 #include "led_manager.h"
 #include "power_manager.h"
 #include "boot_state.h"
+#include "sd_logger.h"
 
 #include <Arduino.h>
 #include <SPI.h>
-#include <SD.h>
-
-// #define SD_CS   15 // orange
-// #define SD_MOSI 20 // yellow
-// #define SD_MISO 19 // green
-// #define SD_SCK  18 // blue
-
-#define SD_CS   20 // tan
-#define SD_MOSI 19 // orange
-#define SD_SCK  18 // yellow
-#define SD_MISO 15 // green
-
-#define LOCAL_LED_PIN 16 // white
-#define LOCAL_BUTTON_PIN 6 // red
 
 ButtonManager button(
     static_cast<uint8_t>(AppConfig::BUTTON_PIN),
@@ -37,6 +23,7 @@ PowerManager powerManager(
 );
 
 SPIClass spi = SPIClass(FSPI);
+SDLogger logger(spi);
 
 void setup() {
     Serial.begin(115200);
@@ -49,75 +36,66 @@ void setup() {
 
     button.begin();
     led.begin();
-    led.setMode(LedMode::SOLID_ON);
+    //led.setMode(LedMode::SOLID_ON);
     powerManager.begin();
 
     Serial.println("Boot Complete");
-
     Serial.println("Starting Setup...");
 
-    pinMode(SD_CS, OUTPUT);
-    digitalWrite(SD_CS, HIGH);
-
-    spi.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
-
-    Serial.println("Initializing SD...");
-    if (!SD.begin(SD_CS, spi, 8000000)) {
-        Serial.println("SD init failed!");
+    if (!logger.begin()) {
+        Serial.println("[MAIN] SD Logger init failed");
         return;
     }
 
-    Serial.println("SD init OK.");
+    Serial.println("[MAIN] SD Logger init OK");
 
-    File f = SD.open("/log.txt", FILE_APPEND);
-    if (!f) {
-        Serial.println("Open /log.txt failed!");
-        return;
-    }
+    powerManager.setShutdownHandler([]() -> bool {
+        logger.beginShutdown();
+        logger.update();
+        return logger.isIdle();
+    });
 
-    f.println("Hello world");
-    f.flush();
-    f.close();
-    Serial.println("Wrote 1 line to /log.txt");
-
-    String lastLine = GetLastLine("/log.csv", 0, "");
-    uint32_t n, ms, chk;
-    bool ok = ParseLastLine(lastLine, n, ms, chk);
-    if (!ok) {
-        Serial.println("Failed to parse last line: " + lastLine);
-        delay(60000);
-        return;
-    }
-
-    bool checksumOk = VerifyChecksum(n, ms, chk);
-    if (!checksumOk) {
-        Serial.println("Checksum failed for last line: " + lastLine);
-        delay(60000);
-        return;
-    } 
-
-    Serial.println("Checksum OK for last line: " + lastLine);
-
-    delay(1000);
+    // fake startup log
+    SDLogger::LogEntry entry;
+    entry.deviceId = "logger";
+    entry.timestampMs = millis();
+    entry.line = "{\"event\":\"boot\",\"boot_count\":" + String(BootState::getBootCount()) + '}';
+    logger.appendNow(entry);
 }
 
 void loop() {
+    delay(1);
+
     button.update();
     powerManager.update();
     led.update();
 
-    /*
-    static bool noError = true;
-    static int32_t n = 0;
-    if (!noError) return;
+    if (!powerManager.isAcceptingRequests()) {
+        logger.beginShutdown();
+    }
 
+    logger.update();
 
-    noError = WriteAndVerify(n);
-    n++;
-    */
+    // temporary for phase 2 test generator
+    static uint32_t lastWriteMs = 0;
+    static uint32_t counter = 0;
+    const uint32_t now = millis();
 
+    if (!powerManager.isAcceptingRequests() || !logger.isAcceptingEntries() || now - lastWriteMs < 5000) {
+        return;
+    }
 
-    delay(1);
-    //delay(1000);
+    lastWriteMs = now;
 
+    SDLogger::LogEntry entry;
+    entry.deviceId = "test_sensor_1";
+    entry.timestampMs = now;
+    entry.line = 
+        "{\"ts_ms\":" + String(now) + 
+        ",\"type\":\"test\"" + 
+        ",\"counter\":" + String(counter++) + '}';
+
+    if (!logger.enqueue(entry)) {
+        Serial.println("[MAIN] Failed to enqueue test log");
+    }
 }
