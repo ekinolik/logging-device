@@ -1,8 +1,11 @@
 #pragma once
 
 #include <Arduino.h>
+#include <functional>
 #include "button_manager.h"
 #include "led_manager.h"
+
+using ShutdownHandler = std::function<bool(void)>;
 
 enum class PowerState {
     ON,
@@ -13,7 +16,7 @@ enum class PowerState {
 };
 
 class PowerManager {
-    public:
+public:
     PowerManager(ButtonManager& button, LedManager& led, uint32_t shutdownHoldMs);
 
     void begin();
@@ -22,7 +25,9 @@ class PowerManager {
     PowerState getState() const;
     bool isAcceptingRequests() const;
 
-    private:
+    void setShutdownHandler(ShutdownHandler handler);
+
+private:
     ButtonManager& m_button;
     LedManager& m_led;
     uint32_t m_shutdownHoldMs;
@@ -36,4 +41,6 @@ class PowerManager {
     void handlePreparingShutdownState(uint32_t now);
     void handleReadyForShutdownState(uint32_t now);
     void performShutdown();
+
+    ShutdownHandler m_shutdownHandler;
 };

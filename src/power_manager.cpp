@@ -126,6 +126,18 @@ void PowerManager::performShutdown() {
         delay(10);
     }
 
+    if (m_shutdownHandler) {
+        const uint32_t shutdownDeadline = millis() + 5000; // 5 second max for shutdown handler
+
+        while (!m_shutdownHandler()) {
+            if ((int32_t)(millis() - shutdownDeadline) >= 0) {
+                Serial.println("[POWER] Shutdown flush timeout");
+                break;
+            }
+            delay(10);
+        }
+    }
+
     BootState::setShutdownReason(ShutdownReason::BUTTON_HOLD);
 
     // Wake again when button is pressed (LOW for active-low button)
@@ -137,4 +149,8 @@ void PowerManager::performShutdown() {
     Serial.flush();
     m_state = PowerState::OFF;
     esp_deep_sleep_start();
+}
+
+void PowerManager::setShutdownHandler(ShutdownHandler handler) {
+    m_shutdownHandler = handler;
 }
