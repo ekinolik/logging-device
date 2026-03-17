@@ -96,6 +96,22 @@ void loop() {
         ",\"counter\":" + String(counter++) + '}';
 
     if (!logger.enqueue(entry)) {
-        Serial.println("[MAIN] Failed to enqueue test log");
+        Serial.println("[MAIN] Failed to enqueue test log 1");
+    }
+
+    if (!logger.enqueue(entry)) {
+        Serial.println("[MAIN] Failed to enqueue test log 2");
+    }
+
+    if (!logger.enqueue(entry)) {
+        Serial.println("[MAIN] Failed to enqueue test log 3");
+    }
+
+    if (!logger.enqueue(entry)) {
+        Serial.println("[MAIN] Failed to enqueue test log 4");
+    }
+
+    if (!logger.enqueue(entry)) {
+        Serial.println("[MAIN] Failed to enqueue test log 5");
     }
 }

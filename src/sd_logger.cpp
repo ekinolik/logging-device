@@ -54,7 +54,7 @@ bool SDLogger::enqueue(const LogEntry& entry) {
         return false;
     }
 
-    if (m_queueCount > AppConfig::SD_MAX_QUEUE_SIZE) {
+    if (m_queueCount >= AppConfig::SD_MAX_QUEUE_SIZE) {
         Serial.println("[SD] Queue full, dropping log entry");
         return false;
     }
