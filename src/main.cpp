@@ -90,6 +90,10 @@ void loop() {
 
         if (logger.isAcceptingEntries()) {
             if (isDuplicate(rx.msg.deviceID, rx.msg.sequence)) {
+                Serial.printf("[MAIN] Duplicate packet from %s seq=%lu\n",
+                    rx.msg.deviceID,
+                    (unsigned long)rx.msg.sequence
+                );
                 accepted = true; // already handled earlier but ACK again
             }
             SDLogger::LogEntry entry;
@@ -101,7 +105,14 @@ void loop() {
 
             if (accepted) {
                 markSeen(rx.msg.deviceID, rx.msg.sequence);
+            } else {
+                Serial.printf("[MAIN] Logger queue full, rejecting packet %s seq=%lu\n",
+                    rx.msg.deviceID,
+                    (unsigned long)rx.msg.sequence
+                );
             }
+        } else {
+            Serial.println("[MAIN] Not accepting entries, rejecting packet");
         }
 
         if (!espNowReceiver.sendAck(rx.mac, rx.msg.deviceID, rx.msg.sequence, accepted)) {
