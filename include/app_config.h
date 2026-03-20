@@ -24,4 +24,13 @@ namespace AppConfig {
 
     static constexpr uint32_t SD_SPI_FREQUENCY = 8000000;
     static constexpr size_t SD_MAX_QUEUE_SIZE = 32;
+
+    // ESPNOW
+    static constexpr uint8_t ESPNOW_CHANNEL = 1;
+    static constexpr size_t ESPNOW_RX_QUEUE_SIZE = 8;
+    static constexpr bool ESPNOW_REQUIRE_KNOWN_PEERS = false; // start open
+
+    static constexpr uint32_t ESPNOW_ACK_TIMEOUT_MS = 400;
+    static constexpr uint8_t ESPNOW_MAX_RETRIES = 5;
+
 }

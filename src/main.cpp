@@ -4,6 +4,7 @@
 #include "power_manager.h"
 #include "boot_state.h"
 #include "sd_logger.h"
+#include "espnow_receiver.h"
 
 #include <Arduino.h>
 #include <SPI.h>
@@ -24,6 +25,17 @@ PowerManager powerManager(
 
 SPIClass spi = SPIClass(FSPI);
 SDLogger logger(spi);
+
+EspNowReceiver espNowReceiver;
+
+struct DeviceSequenceState {
+    String deviceID;
+    uint32_t lastSequence;
+    bool used = false;
+};
+
+static constexpr size_t MAX_DEVICES = 16;
+DeviceSequenceState g_deviceSeq[MAX_DEVICES];
 
 void setup() {
     Serial.begin(115200);
@@ -46,8 +58,13 @@ void setup() {
         Serial.println("[MAIN] SD Logger init failed");
         return;
     }
-
     Serial.println("[MAIN] SD Logger init OK");
+
+    if (!espNowReceiver.begin()) {
+        Serial.println("[MAIN] ESPNOW Receiver init failed");
+        return;
+    }
+    Serial.println("[MAIN] ESPNOW Receiver init OK");
 
     powerManager.setShutdownHandler([]() -> bool {
         logger.beginShutdown();
@@ -64,7 +81,39 @@ void setup() {
 }
 
 void loop() {
-    delay(1);
+    espNowReceiver.update();
+
+    EspNowReceiver::ReceivedMessage rx;
+
+    while (espNowReceiver.dequeueMessage(rx)) {
+        bool accepted = false;
+
+        if (logger.isAcceptingEntries()) {
+            if (isDuplicate(rx.msg.deviceID, rx.msg.sequence)) {
+                accepted = true; // already handled earlier but ACK again
+            }
+            SDLogger::LogEntry entry;
+            entry.deviceId = String(rx.msg.deviceID);
+            entry.timestampMs = rx.msg.timestampMs;
+            entry.line = String(rx.msg.jsonLine);
+
+            accepted = logger.enqueue(entry);
+
+            if (accepted) {
+                markSeen(rx.msg.deviceID, rx.msg.sequence);
+            }
+        }
+
+        if (!espNowReceiver.sendAck(rx.mac, rx.msg.deviceID, rx.msg.sequence, accepted)) {
+            Serial.println("[MAIN] Failed to send ACK");
+        }
+
+        if (!accepted) {
+            Serial.println("[MAIN] Logger rejected packet; NACK sent");
+        }
+    }
+
+    logger.update();
 
     button.update();
     powerManager.update();
@@ -74,6 +123,9 @@ void loop() {
         logger.beginShutdown();
     }
 
+    delay(1);
+
+    /*
     logger.update();
 
     // temporary for phase 2 test generator
@@ -113,5 +165,37 @@ void loop() {
 
     if (!logger.enqueue(entry)) {
         Serial.println("[MAIN] Failed to enqueue test log 5");
+    }
+    */
+}
+
+bool isDuplicate(const char* deviceID, uint32_t sequence) {
+    for (size_t i = 0; i < MAX_DEVICES; i++) {
+        if (!g_deviceSeq[i].used) continue;
+        if (g_deviceSeq[i].deviceID == deviceID) {
+            return sequence <= g_deviceSeq[i].lastSequence;
+        }
+    }
+
+    return false;
+}
+
+void markSeen(const char* deviceID, uint32_t sequence) {
+    for (size_t i = 0; i < MAX_DEVICES; i++) {
+        if (g_deviceSeq[i].used && g_deviceSeq[i].deviceID == deviceID) {
+            g_deviceSeq[i].lastSequence = sequence;
+
+            return;
+        }
+    }
+
+    for (size_t i = 0; i < MAX_DEVICES; i++) {
+        if (!g_deviceSeq[i].used) {
+            g_deviceSeq[i].used = true;
+            g_deviceSeq[i].deviceID = deviceID;
+            g_deviceSeq[i].lastSequence = sequence;
+
+            return;
+        }
     }
 }
