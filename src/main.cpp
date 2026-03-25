@@ -9,6 +9,9 @@
 #include <Arduino.h>
 #include <SPI.h>
 
+void markSeen(const char* deviceID, uint32_t sequence);
+bool isDuplicate(const char* deviceID, uint32_t sequence);
+
 ButtonManager button(
     static_cast<uint8_t>(AppConfig::BUTTON_PIN),
     AppConfig::BUTTON_ACTIVE_LOW,

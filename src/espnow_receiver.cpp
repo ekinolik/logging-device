@@ -125,6 +125,11 @@ void EspNowReceiver::processRxItem(const RxItem& item) {
         return;
     }
 
+    Serial.printf("[ESPNOW] Received packet from %02X:%02X:%02X:%02X:%02X:%02X len=%u\n",
+        item.mac[0], item.mac[1], item.mac[2], item.mac[3], item.mac[4], item.mac[5],
+        item.len
+    );
+
     LogMessageV1 msg;
     memcpy(&msg, item.data, sizeof(LogMessageV1));
 
@@ -176,6 +181,7 @@ void EspNowReceiver::maybeAddPeer(const uint8_t mac[6]) {
     esp_now_peer_info_t peer = {};
     memcpy(peer.peer_addr, mac, 6);
     peer.channel = AppConfig::ESPNOW_CHANNEL;
+    peer.channel = 0;
     peer.encrypt = false;
 
     esp_err_t err = esp_now_add_peer(&peer);
