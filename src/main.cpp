@@ -19,12 +19,7 @@ ButtonManager button(
 );
 
 LedManager led(static_cast<uint8_t>(AppConfig::LED_PIN));
-
-PowerManager powerManager(
-    button,
-    led,
-    AppConfig::SHUTDOWN_HOLD_MS
-);
+PowerManager powerManager(button, led, AppConfig::SHUTDOWN_HOLD_MS);
 
 SPIClass spi = SPIClass(FSPI);
 SDLogger logger(spi);
@@ -40,6 +35,8 @@ struct DeviceSequenceState {
 static constexpr size_t MAX_DEVICES = 16;
 DeviceSequenceState g_deviceSeq[MAX_DEVICES];
 
+static void printPacket(const EspNowReceiver::ReceivedMessage& rx);
+
 void setup() {
     Serial.begin(115200);
     delay(2000);
@@ -51,17 +48,21 @@ void setup() {
 
     button.begin();
     led.begin();
-    //led.setMode(LedMode::SOLID_ON);
     powerManager.begin();
 
     Serial.println("Boot Complete");
-    Serial.println("Starting Setup...");
+    Serial.println("Starting Bridge Setup...");
 
     if (!logger.begin()) {
         Serial.println("[MAIN] SD Logger init failed");
-        return;
+        if (AppConfig::LOGGING_REQUIRED) {
+            return;
+        }
     }
-    Serial.println("[MAIN] SD Logger init OK");
+
+    if (logger.isInitialized()) {
+        Serial.println("[MAIN] SD Logger init OK");
+    }
 
     if (!espNowReceiver.begin()) {
         Serial.println("[MAIN] ESPNOW Receiver init failed");
@@ -75,12 +76,14 @@ void setup() {
         return logger.isIdle();
     });
 
-    // fake startup log
-    SDLogger::LogEntry entry;
-    entry.deviceId = "logger";
-    entry.timestampMs = millis();
-    entry.line = "{\"event\":\"boot\",\"boot_count\":" + String(BootState::getBootCount()) + '}';
-    logger.appendNow(entry);
+    if (logger.isInitialized()) {
+        // fake startup log
+        SDLogger::LogEntry entry;
+        entry.deviceId = "logger";
+        entry.timestampMs = millis();
+        entry.line = "{\"event\":\"boot\",\"boot_count\":" + String(BootState::getBootCount()) + '}';
+        logger.appendNow(entry);
+    }
 }
 
 void loop() {
@@ -90,32 +93,48 @@ void loop() {
 
     while (espNowReceiver.dequeueMessage(rx)) {
         bool accepted = false;
+        bool pktWritten = false;
+        bool duplicatePkt = isDuplicate(rx.msg.deviceID, rx.msg.sequence);
 
-        if (logger.isAcceptingEntries()) {
-            if (isDuplicate(rx.msg.deviceID, rx.msg.sequence)) {
-                Serial.printf("[MAIN] Duplicate packet from %s seq=%lu\n",
-                    rx.msg.deviceID,
-                    (unsigned long)rx.msg.sequence
-                );
-                accepted = true; // already handled earlier but ACK again
-            }
+        if (!powerManager.isAcceptingRequests()) {
+            Serial.println("[MAIN] Shutting down, not accepting requests");
+        } else if (duplicatePkt) {
+            Serial.printf("[MAIN] Duplicate packet from %s seq=%lu\n",
+                rx.msg.deviceID, (unsigned long)rx.msg.sequence
+            );
+            accepted = true; // ACK duplicate but do not process again
+        } else {
+            printPacket(rx);
+            markSeen(rx.msg.deviceID, rx.msg.sequence);
+            accepted = true;
+        }
+
+        if (!espNowReceiver.sendAck(rx.mac, rx.msg.deviceID, rx.msg.sequence, accepted)) {
+            Serial.println("[MAIN] Failed to send ACK");
+        }
+
+        if (!accepted) {
+            Serial.println("[MAIN] Packet rejected, NACK sent");
+        }
+
+        if (accepted && !duplicatePkt && logger.isAcceptingEntries()) {
             SDLogger::LogEntry entry;
             entry.deviceId = String(rx.msg.deviceID);
             entry.timestampMs = rx.msg.timestampMs;
             entry.line = String(rx.msg.jsonLine);
 
-            accepted = logger.enqueue(entry);
+            pktWritten = logger.enqueue(entry);
 
-            if (accepted) {
-                markSeen(rx.msg.deviceID, rx.msg.sequence);
-            } else {
+            if (!pktWritten) {
+                // Need to improve this if we want logging as first class citizen
+                // Otherwise we can accept/ACK but not log.
                 Serial.printf("[MAIN] Logger queue full, rejecting packet %s seq=%lu\n",
                     rx.msg.deviceID,
                     (unsigned long)rx.msg.sequence
                 );
             }
         } else {
-            Serial.println("[MAIN] Not accepting entries, rejecting packet");
+            Serial.println("[MAIN] Not accepting log entries");
         }
 
         if (!espNowReceiver.sendAck(rx.mac, rx.msg.deviceID, rx.msg.sequence, accepted)) {
@@ -133,11 +152,7 @@ void loop() {
     powerManager.update();
     led.update();
 
-    if (!powerManager.isAcceptingRequests()) {
-        logger.beginShutdown();
-    }
-
-    delay(1);
+    //delay(1);
 
     /*
     logger.update();
@@ -212,4 +227,15 @@ void markSeen(const char* deviceID, uint32_t sequence) {
             return;
         }
     }
+}
+
+static void printPacket(const EspNowReceiver::ReceivedMessage& rx) {
+    Serial.println("----- ESPNOW RX ------");
+    Serial.printf("From MAC: %02X:%02X:%02X:%02X:%02X:%02X\n",
+        rx.mac[0], rx.mac[1], rx.mac[2], rx.mac[3], rx.mac[4], rx.mac[5]
+    );
+    Serial.printf("Device ID: %s\n", rx.msg.deviceID);
+    Serial.printf("Sequence : %lu\n", (unsigned long)rx.msg.sequence);
+    Serial.printf("Timestamp: %lu\n", (unsigned long)rx.msg.timestampMs);
+    Serial.printf("Payload:   %s\n", rx.msg.jsonLine);
 }

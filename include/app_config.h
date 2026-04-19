@@ -16,6 +16,8 @@ namespace AppConfig {
 
     static constexpr uint32_t STABLE_SHUTDOWN_RELEASE_MS = 150;
 
+    static constexpr bool LOGGING_REQUIRED = false;
+
     // SD Card
     static constexpr gpio_num_t SD_CS_PIN = GPIO_NUM_20;
     static constexpr gpio_num_t SD_MOSI_PIN = GPIO_NUM_19;

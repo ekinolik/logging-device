@@ -31,7 +31,7 @@ class SDLogger {
     private:
     SPIClass& m_spi;
     bool m_initialized = false;
-    bool m_acceptingEntries = true;
+    bool m_acceptingEntries = false;
     bool m_shutdownRequested = false;
 
     LogEntry m_queue[AppConfig::SD_MAX_QUEUE_SIZE];

@@ -4,13 +4,15 @@
 SDLogger::SDLogger(SPIClass& spi) : m_spi(spi) {}
 
 bool SDLogger::begin() {
-    m_acceptingEntries = true;
-    m_shutdownRequested = false;
-    m_queueHead = 0;
-    m_queueTail = 0;
-    m_queueCount = 0;
-
     m_initialized = initSDCard();
+
+    if (m_initialized) {
+        m_acceptingEntries = true;
+        m_shutdownRequested = false;
+        m_queueHead = 0;
+        m_queueTail = 0;
+        m_queueCount = 0;
+    }
 
     return m_initialized;
 }
