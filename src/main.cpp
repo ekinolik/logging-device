@@ -237,5 +237,6 @@ static void printPacket(const EspNowReceiver::ReceivedMessage& rx) {
     Serial.printf("Device ID: %s\n", rx.msg.deviceID);
     Serial.printf("Sequence : %lu\n", (unsigned long)rx.msg.sequence);
     Serial.printf("Timestamp: %lu\n", (unsigned long)rx.msg.timestampMs);
+    Serial.printf("RSSI     : %d dBm\n", rx.rssi);
     Serial.printf("Payload:   %s\n", rx.msg.jsonLine);
 }

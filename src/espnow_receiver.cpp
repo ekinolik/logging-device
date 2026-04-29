@@ -81,13 +81,15 @@ void EspNowReceiver::handleReceive(const esp_now_recv_info_t* info, const uint8_
 
     maybeAddPeer(info->src_addr);
 
-    if (!enqueueRx(info->src_addr, data, static_cast<uint8_t>(len))) {
+    int8_t rssi = info->rx_ctrl ? info->rx_ctrl->rssi : 0;
+
+    if (!enqueueRx(info->src_addr, data, static_cast<uint8_t>(len), rssi)) {
         m_droppedPackets++;
     }
 }
 
 // Raw Queue
-bool EspNowReceiver::enqueueRx(const uint8_t mac[6], const uint8_t* data, uint8_t len) {
+bool EspNowReceiver::enqueueRx(const uint8_t mac[6], const uint8_t* data, uint8_t len, int8_t rssi) {
     if (m_rxCount >= AppConfig::ESPNOW_RX_QUEUE_SIZE) {
         return false;
     }
@@ -97,6 +99,7 @@ bool EspNowReceiver::enqueueRx(const uint8_t mac[6], const uint8_t* data, uint8_
     memcpy(slot.mac, mac, 6);
     memcpy(slot.data, data, len);
     slot.len = len;
+    slot.rssi = rssi;
 
     m_rxTail = (m_rxTail + 1) % AppConfig::ESPNOW_RX_QUEUE_SIZE;
     m_rxCount++;
@@ -147,6 +150,7 @@ void EspNowReceiver::processRxItem(const RxItem& item) {
     ReceivedMessage out;
     memcpy(out.mac, item.mac, 6);
     out.msg = msg;
+    out.rssi = item.rssi;
     if (!enqueueParsed(out)) {
         m_droppedPackets++;
         return;

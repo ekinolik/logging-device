@@ -12,6 +12,7 @@ public:
     struct ReceivedMessage {
         uint8_t mac[6];
         LogMessageV1 msg;
+        int8_t rssi;
     };
 
     EspNowReceiver();
@@ -34,6 +35,7 @@ private:
         uint8_t mac[6];
         uint8_t data[250];
         uint8_t len;
+        int8_t rssi;
     };
 
     static EspNowReceiver* s_instance;
@@ -41,7 +43,7 @@ private:
     static void onDataRecv(const esp_now_recv_info_t* info, const uint8_t* data, int len);
 
     void handleReceive(const esp_now_recv_info_t* info, const uint8_t* data, int len);
-    bool enqueueRx(const uint8_t mac[6], const uint8_t* data, uint8_t len);
+    bool enqueueRx(const uint8_t mac[6], const uint8_t* data, uint8_t len, int8_t rssi);
     bool dequeueRx(RxItem& out);
     void processRxItem(const RxItem& item);
     bool enqueueParsed(const ReceivedMessage& msg);
